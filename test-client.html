@@ -1,114 +1,100 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>WebSocket 채팅 테스트</title>
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <meta charset="UTF-8">
+  <title>채팅 테스트 클라이언트</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
-  <h2>채팅 테스트</h2>
+  <h1>💬 채팅 클라이언트</h1>
 
-  <label>
-    유저 ID:
-    <input type="text" id="userId" value="user123" />
-  </label><br />
-  <label>
-    닉네임:
-    <input type="text" id="nickname" value="홍길동" />
-  </label><br />
-  <label>
-    방 코드:
-    <input type="text" id="roomCode" value="room1234" />
-  </label><br /><br />
+  <label>유저 ID:
+    <input type="text" id="userId" value="user123">
+  </label><br/>
 
-  <button onclick="connectSocket()">소켓 연결</button>
+  <label>닉네임:
+    <input type="text" id="nickname" value="홍길동">
+  </label><br/>
+
+  <label>방 코드:
+    <input type="text" id="roomCode" value="room1">
+  </label><br/>
+
+  <label>메시지:
+    <input type="text" id="message">
+  </label><br/><br/>
+
   <button onclick="joinRoom()">방 입장</button>
-  <button onclick="getChatLogs()">채팅 로그 불러오기</button><br /><br />
+  <button onclick="sendMessage()">메시지 전송</button>
+  <button onclick="getLogs()">채팅 기록 조회</button>
+  <button onclick="reconnect()">🔁 닉네임 변경 후 재접속</button>
 
-  <input type="text" id="messageInput" placeholder="메시지 입력 (예: <script>alert(1)</script>)" style="width: 300px;" />
-  <button onclick="sendMessage()">메시지 보내기</button>
-
-  <h3>채팅 로그</h3>
-  <div id="chatLog" style="border:1px solid #ccc; padding:10px; width:400px; height:300px; overflow-y:scroll;"></div>
+  <pre id="log" style="border:1px solid #ccc; padding:10px; height:300px; overflow:auto;"></pre>
 
   <script>
-    let socket;
+    let socket = null;
 
-    function connectSocket() {
+    function log(message) {
+      const logBox = document.getElementById('log');
+      logBox.textContent += message + '\n';
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function connect() {
       const userId = document.getElementById('userId').value;
       const nickname = document.getElementById('nickname').value;
 
       socket = io('http://localhost:3000', {
-        auth: { userId, nickname },
+        auth: { userId, nickname }
       });
 
-      socket.on('connect', () => {
-        logMessage(`✅ 연결됨 (socket.id: ${socket.id})`);
+      // 이벤트 등록
+      socket.on('joined_room', data => log(`✅ 방 입장 완료: ${JSON.stringify(data)}`));
+      socket.on('user_joined', data => log(`👤 입장: ${data.nickname}`));
+      socket.on('user_left', data => log(`👋 퇴장: ${data.nickname}`));
+      socket.on('receive_message', data => log(`💬 ${data.nickname}: ${data.message}`));
+      socket.on('chat_logs', data => {
+        log('📜 이전 기록:');
+        data.forEach(msg => log(`  ${msg.nickname}: ${msg.message}`));
       });
-
-      socket.on('joined_room', (data) => {
-        logMessage(`🟢 방 입장: ${data.roomCode}`);
-      });
-
-      socket.on('user_joined', (data) => {
-        logMessage(`👤 ${data.nickname} 님이 입장하셨습니다.`);
-      });
-
-      socket.on('receive_message', (data) => {
-        logMessage(`💬 ${data.nickname}: ${data.message}`);
-      });
-
-      socket.on('chat_logs', (logs) => {
-        if (logs.length === 0) {
-          logMessage('📭 채팅 기록이 없습니다.');
-        } else {
-          logMessage('📜 채팅 로그:');
-          logs.forEach(msg => {
-            logMessage(`🕓 ${msg.nickname}: ${msg.message}`);
-          });
-        }
-      });
-
-      socket.on('error', (err) => {
-        logMessage(`❌ 에러: ${err.reason || JSON.stringify(err)}`);
-      });
-
-      socket.on('disconnect', () => {
-        logMessage('🔌 연결 종료됨');
-      });
+      socket.on('error', err => log(`❗ 오류: ${err.code} - ${err.reason}`));
     }
 
     function joinRoom() {
-      if (!socket?.connected) return alert('소켓이 연결되지 않았습니다.');
+      if (!socket || !socket.connected) {
+        connect();
+      }
+
       const roomCode = document.getElementById('roomCode').value;
       socket.emit('join_room', { roomCode });
     }
 
     function sendMessage() {
-      if (!socket?.connected) return alert('소켓이 연결되지 않았습니다.');
-      const roomCode = document.getElementById('roomCode').value;
-      const message = document.getElementById('messageInput').value.trim();
-
-      if (!message) {
-        return alert('메시지를 입력해주세요.');
+      if (!socket || !socket.connected) {
+        log("⚠️ 먼저 방에 입장하세요.");
+        return;
       }
 
+      const roomCode = document.getElementById('roomCode').value;
+      const message = document.getElementById('message').value;
       socket.emit('send_message', { roomCode, message });
-      document.getElementById('messageInput').value = '';
     }
 
-    function getChatLogs() {
-      if (!socket?.connected) return alert('소켓이 연결되지 않았습니다.');
+    function getLogs() {
+      if (!socket || !socket.connected) {
+        log("⚠️ 먼저 방에 입장하세요.");
+        return;
+      }
+
       const roomCode = document.getElementById('roomCode').value;
       socket.emit('get_chat_logs', { roomCode });
     }
 
-    function logMessage(msg) {
-      const chatLog = document.getElementById('chatLog');
-      const div = document.createElement('div');
-      div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
+    function reconnect() {
+      if (socket && socket.connected) {
+        socket.disconnect();
+      }
+      connect();
     }
   </script>
 </body>
