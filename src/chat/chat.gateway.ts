@@ -143,6 +143,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.emitError(client, 'SERVER_ERROR', '방 참여에 실패했습니다');
     }
   }
+  /**
+ * 방 퇴장 요청 핸들러
+ */
+@SubscribeMessage('leave_room')
+async handleLeaveRoom(client: Socket) {
+  const clientData = this.clients.get(client.id);
+
+  if (!clientData || !clientData.roomCode) {
+    this.emitError(client, 'NOT_IN_ROOM', '현재 방에 참여하지 않았습니다');
+    return;
+  }
+
+  const { roomCode, nickname } = clientData;
+
+  // 1. 방에서 퇴장
+  client.leave(roomCode);
+
+  // 2. 클라이언트 정보 업데이트
+  clientData.roomCode = undefined;
+
+  // 3. 방 내 다른 사용자에게 퇴장 알림
+  this.server.to(roomCode).emit('user_left', { nickname });
+
+  // 4. 성공 응답
+  client.emit('left_room', { roomCode });
+}
 
   /**
    * 메시지 전송 핸들러
