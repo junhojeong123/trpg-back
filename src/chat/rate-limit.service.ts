@@ -1,33 +1,32 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import Redis from 'ioredis';
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
+
 @Injectable()
 export class RateLimitService {
-  private redis: Redis | null = null;
-
-  constructor() {
-    if (process.env.USE_REDIS === 'true') {
-      this.redis = new Redis();
-      this.redis.on('error', (err) => {
-        console.error('Redis 연결 오류:', err.message);
-      });
-    }
-  }
+  constructor(@Inject(CACHE_MANAGER) private cache: Cache) {}
 
   async isRateLimited(userId: string): Promise<boolean> {
-    if (!this.redis) {
-      // Redis 비활성화 시 항상 통과
-      return false;
-    }
-
     const key = `chat:${userId}`;
     const ttl = 60;
     const limit = 10;
 
-    const count = await this.redis.incr(key);
-    if (count === 1) {
-      await this.redis.expire(key, ttl);
+    const rawCount = await this.cache.get<number>(key);
+    const count = rawCount ?? 0;
+
+    if (count >= limit) {
+      return true;
     }
 
-    return count > limit;
+    if (count === 0) {
+      await this.cache.set(key, 1, ttl); // 숫자 TTL은 OK
+    } else {
+      // 객체 TTL 안 될 경우, 강제 캐스팅 or 그냥 숫자 TTL을 재설정
+      await (this.cache as any).set(key, count + 1, { ttl: 0 });
+      // 또는 그냥 다시 ttl 설정해도 괜찮다면 아래처럼:
+      // await this.cache.set(key, count + 1, ttl); // TTL 다시 설정됨 (슬라이딩처럼 됨)
+    }
+
+    return false;
   }
 }
