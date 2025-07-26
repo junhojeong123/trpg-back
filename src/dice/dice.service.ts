@@ -6,11 +6,11 @@ export class DiceService {
   private history: {
     timestamp: Date;
     command: string;
-    result: { rolls: number[]; total: number };
+    result: { rolls: number[]; total: number; detail: string };
   }[] = [];
 
   // 주사위 명령어 파싱 및 실행 (예: "2d6+3")
-  rollCommand(command: string): { rolls: number[]; total: number } {
+  rollCommand(command: string): { rolls: number[]; total: number; detail: string } {
     const regex = /^(\d+)d(\d+)([+-]\d+)?$/;
     const match = command.match(regex);
 
@@ -29,10 +29,15 @@ export class DiceService {
     const rolls = Array.from({ length: count }, () => this.rollDice(sides));
     const total = rolls.reduce((sum, val) => sum + val, 0) + modifier;
 
-    // 히스토리에 기록
-    this.recordRoll(command, { rolls, total });
+    // 문자열 형태 결과: 예) "3 + 4 + 5 + 2"
+    const detail =
+      `${rolls.join(' + ')}` +
+      (modifier !== 0 ? (modifier > 0 ? ` + ${modifier}` : ` - ${Math.abs(modifier)}`) : '');
 
-    return { rolls, total };
+    // 히스토리에 기록
+    this.recordRoll(command, { rolls, total, detail });
+
+    return { rolls, total, detail };
   }
 
   // 단일 주사위 굴리기
@@ -41,7 +46,7 @@ export class DiceService {
   }
 
   // 주사위 결과 기록
-  recordRoll(command: string, result: { rolls: number[]; total: number }): void {
+  recordRoll(command: string, result: { rolls: number[]; total: number; detail: string }): void {
     this.history.unshift({
       timestamp: new Date(),
       command,

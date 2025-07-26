@@ -5,9 +5,10 @@ import { chatmessage } from './entities/chat-message.entity';
 import { ChatService } from './chat.service';
 import { ChatController } from './chat.controller';
 import { RateLimitService } from './rate-limit.service';
+import { DiceService } from 'src/dice/dice.service';
 @Module({
   imports: [TypeOrmModule.forFeature([chatmessage])],
-  providers: [ChatGateway, ChatService, RateLimitService],
+  providers: [ChatGateway, ChatService, RateLimitService, DiceService],
   controllers: [ChatController],
   exports: [ChatService],
 })

@@ -11,12 +11,14 @@ import createDOMPurify from 'dompurify';
 import { RateLimitService } from './rate-limit.service';
 import { JSDOM } from 'jsdom';
 import { Logger } from '@nestjs/common';
+import { DiceController } from 'src/dice/dice.controller';
 
 // DTO 및 검증 관련 모듈 추가
 import { plainToClass } from 'class-transformer';
 import { validate } from 'class-validator';
 import { JoinRoomDto } from './dto/join-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
+import { DiceService } from 'src/dice/dice.service';
 
 // 메시지 길이, 속도 제한 등의 설정 상수
 const MAX_MESSAGE_LENGTH = 200;
@@ -49,6 +51,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly chatService: ChatService,
     private readonly rateLimitService: RateLimitService,
+    private readonly diceService: DiceService,
   ) {}
 
   /**
@@ -225,11 +228,26 @@ async handleLeaveRoom(client: Socket) {
         ALLOWED_ATTR: [],
       });
 
+
       // 메시지 길이 제한
       if (cleanMessage.length > MAX_MESSAGE_LENGTH) {
         this.emitError(client, 'MESSAGE_TOO_LONG', `메시지는 최대 ${MAX_MESSAGE_LENGTH}자까지 가능합니다`);
         return;
       }
+      // 주사위 명령어 처리
+      // 예: "/roll 2d6+3" 형식의 명령어
+      if (cleanMessage.startsWith('/roll')) {
+  const result = this.diceService.rollCommand(cleanMessage);
+  const resultPayload = {
+    senderId: 'System',
+    nickname: ' 주사위',
+    message: `${clientData.nickname}의 주사위 결과: ${result.total} (${result.detail})`,
+    roomCode,
+    timestamp: new Date(),
+  };
+  this.server.to(roomCode).emit('receive_message', resultPayload);
+  return;
+}
 
       // 전송할 메시지 정보 구성
       const payload = {
