@@ -13,6 +13,7 @@ import { JSDOM } from 'jsdom';
 import { Logger } from '@nestjs/common';
 import { DiceController } from 'src/dice/dice.controller';
 
+
 // DTO 및 검증 관련 모듈 추가
 import { plainToClass } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -236,11 +237,16 @@ async handleLeaveRoom(client: Socket) {
       }
       // 주사위 명령어 처리
       // 예: "/roll 2d6+3" 형식의 명령어
-      if (cleanMessage.startsWith('/roll')) {
-  const result = this.diceService.rollCommand(cleanMessage);
+if (cleanMessage.startsWith('/roll')) {
+  // ✅ 1. "/roll " 제거 및 공백 정리
+  const diceCommand = cleanMessage.replace(/^\/roll\s+/, '').trim();
+  
+  // ✅ 2. 순수 주사위 명령어만 전달
+  const result = this.diceService.rollCommand(diceCommand);
+  
   const resultPayload = {
     senderId: 'System',
-    nickname: ' 주사위',
+    nickname: '주사위',
     message: `${clientData.nickname}의 주사위 결과: ${result.total} (${result.detail})`,
     roomCode,
     timestamp: new Date(),
@@ -248,7 +254,6 @@ async handleLeaveRoom(client: Socket) {
   this.server.to(roomCode).emit('receive_message', resultPayload);
   return;
 }
-
       // 전송할 메시지 정보 구성
       const payload = {
         senderId: clientData.userId,

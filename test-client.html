@@ -52,11 +52,20 @@
       socket.on('joined_room', data => log(`✅ 방 입장 완료: ${JSON.stringify(data)}`));
       socket.on('user_joined', data => log(`👤 입장: ${data.nickname}`));
       socket.on('user_left', data => log(`👋 퇴장: ${data.nickname}`));
-      socket.on('receive_message', data => log(`💬 ${data.nickname}: ${data.message}`));
+      
+      socket.on('receive_message', data => {
+        if (data.detail?.rolls) {
+          log(`🎲 ${data.nickname}의 주사위 결과 (${data.detail.rolls.join(', ')}) = 총합 ${data.detail.total}`);
+        } else {
+          log(`💬 ${data.nickname}: ${data.message}`);
+        }
+      });
+
       socket.on('chat_logs', data => {
         log('📜 이전 기록:');
         data.forEach(msg => log(`  ${msg.nickname}: ${msg.message}`));
       });
+
       socket.on('error', err => log(`❗ 오류: ${err.code} - ${err.reason}`));
     }
 

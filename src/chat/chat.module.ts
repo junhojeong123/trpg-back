@@ -7,9 +7,11 @@ import { ChatController } from './chat.controller';
 import { RateLimitService } from './rate-limit.service';
 import { DiceService } from 'src/dice/dice.service';
 @Module({
-  imports: [TypeOrmModule.forFeature([chatmessage])],
+  imports: [
+    TypeOrmModule.forFeature([chatmessage]),
+  ],
   providers: [ChatGateway, ChatService, RateLimitService, DiceService],
   controllers: [ChatController],
-  exports: [ChatService],
+  exports: [ChatService, RateLimitService, DiceService],
 })
 export class ChatModule {}
