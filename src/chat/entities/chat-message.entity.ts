@@ -1,7 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
 
-@Entity('chatmessage') 
-export class chatmessage { 
+@Entity('Chatmessage') 
+export class Chatmessage { 
   @PrimaryGeneratedColumn()
   id: number;
 

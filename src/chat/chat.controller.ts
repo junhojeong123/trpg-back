@@ -1,7 +1,7 @@
 
 import { Controller, Get, Query, NotFoundException } from '@nestjs/common';
 import { ChatService } from './chat.service';
-import { chatmessage } from './entities/chat-message.entity';
+import { Chatmessage } from './entities/chat-message.entity';
 
 @Controller('chat')
 export class ChatController {
@@ -10,7 +10,7 @@ export class ChatController {
   @Get('logs')
   async getChatLogsByRoom(
     @Query('roomCode') roomCode: string,
-  ): Promise<chatmessage[]> {
+  ): Promise<Chatmessage[]> {
     if (!roomCode) {
       throw new NotFoundException('방 코드가 필요합니다.');
     }

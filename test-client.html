@@ -1,110 +1,256 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>채팅 테스트 클라이언트</title>
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>채팅 테스트</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .chat-container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .system-message {
+            color: #666;
+            font-style: italic;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+        }
+        input, button {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .connected {
+            color: green;
+        }
+        .disconnected {
+            color: red;
+        }
+    </style>
 </head>
 <body>
-  <h1>💬 채팅 클라이언트</h1>
+    <h1>채팅 테스트</h1>
+    
+    <div class="chat-container">
+        <h3>연결 상태: <span id="status" class="disconnected">연결되지 않음</span></h3>
+        
+        <div>
+            <input type="text" id="userId" placeholder="사용자 ID" value="user1">
+            <input type="text" id="nickname" placeholder="닉네임" value="닉네임1">
+            <button onclick="connect()">연결</button>
+            <button onclick="disconnect()" disabled id="disconnectBtn">연결 해제</button>
+        </div>
 
-  <label>유저 ID:
-    <input type="text" id="userId" value="user123">
-  </label><br/>
+        <div>
+            <input type="text" id="roomCode" placeholder="방 코드 (예: TEST)" value="TEST">
+            <button onclick="joinRoom()" disabled id="joinBtn">방 입장</button>
+            <button onclick="leaveRoom()" disabled id="leaveBtn">방 퇴장</button>
+        </div>
 
-  <label>닉네임:
-    <input type="text" id="nickname" value="홍길동">
-  </label><br/>
+        <div class="messages" id="messages"></div>
 
-  <label>방 코드:
-    <input type="text" id="roomCode" value="room1">
-  </label><br/>
+        <div>
+            <input type="text" id="messageInput" placeholder="메시지를 입력하세요..." disabled>
+            <button onclick="sendMessage()" disabled id="sendBtn">전송</button>
+            <button onclick="getChatLogs()" disabled id="logsBtn">채팅 기록</button>
+        </div>
 
-  <label>메시지:
-    <input type="text" id="message">
-  </label><br/><br/>
+        <div>
+            <input type="text" id="diceInput" placeholder="주사위 명령어 (예: 2d6+3)" disabled>
+            <button onclick="sendDiceCommand()" disabled id="diceBtn">주사위 굴리기</button>
+        </div>
+    </div>
 
-  <button onclick="joinRoom()">방 입장</button>
-  <button onclick="sendMessage()">메시지 전송</button>
-  <button onclick="getLogs()">채팅 기록 조회</button>
-  <button onclick="reconnect()">🔁 닉네임 변경 후 재접속</button>
+    <script>
+        let socket = null;
 
-  <pre id="log" style="border:1px solid #ccc; padding:10px; height:300px; overflow:auto;"></pre>
-
-  <script>
-    let socket = null;
-
-    function log(message) {
-      const logBox = document.getElementById('log');
-      logBox.textContent += message + '\n';
-      logBox.scrollTop = logBox.scrollHeight;
-    }
-
-    function connect() {
-      const userId = document.getElementById('userId').value;
-      const nickname = document.getElementById('nickname').value;
-
-      socket = io('http://localhost:3000', {
-        auth: { userId, nickname }
-      });
-
-      // 이벤트 등록
-      socket.on('joined_room', data => log(`✅ 방 입장 완료: ${JSON.stringify(data)}`));
-      socket.on('user_joined', data => log(`👤 입장: ${data.nickname}`));
-      socket.on('user_left', data => log(`👋 퇴장: ${data.nickname}`));
-      
-      socket.on('receive_message', data => {
-        if (data.detail?.rolls) {
-          log(`🎲 ${data.nickname}의 주사위 결과 (${data.detail.rolls.join(', ')}) = 총합 ${data.detail.total}`);
-        } else {
-          log(`💬 ${data.nickname}: ${data.message}`);
+        function addMessage(message, isSystem = false) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSystem ? 'system-message' : 'user-message'}`;
+            messageDiv.textContent = message;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-      });
 
-      socket.on('chat_logs', data => {
-        log('📜 이전 기록:');
-        data.forEach(msg => log(`  ${msg.nickname}: ${msg.message}`));
-      });
+        function connect() {
+            const userId = document.getElementById('userId').value;
+            const nickname = document.getElementById('nickname').value;
 
-      socket.on('error', err => log(`❗ 오류: ${err.code} - ${err.reason}`));
-    }
+            if (!userId || !nickname) {
+                alert('사용자 ID와 닉네임을 입력하세요');
+                return;
+            }
 
-    function joinRoom() {
-      if (!socket || !socket.connected) {
-        connect();
-      }
+            // NestJS 서버 주소 (필요시 변경)
+            socket = io('http://localhost:3000', {
+                auth: {
+                    userId: userId,
+                    nickname: nickname
+                }
+            });
 
-      const roomCode = document.getElementById('roomCode').value;
-      socket.emit('join_room', { roomCode });
-    }
+            socket.on('connect', () => {
+                document.getElementById('status').textContent = '연결됨';
+                document.getElementById('status').className = 'connected';
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('joinBtn').disabled = false;
+                addMessage('서버에 연결되었습니다', true);
+            });
 
-    function sendMessage() {
-      if (!socket || !socket.connected) {
-        log("⚠️ 먼저 방에 입장하세요.");
-        return;
-      }
+            socket.on('disconnect', () => {
+                document.getElementById('status').textContent = '연결 해제됨';
+                document.getElementById('status').className = 'disconnected';
+                document.getElementById('disconnectBtn').disabled = true;
+                document.getElementById('joinBtn').disabled = true;
+                document.getElementById('leaveBtn').disabled = true;
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+                document.getElementById('logsBtn').disabled = true;
+                document.getElementById('diceInput').disabled = true;
+                document.getElementById('diceBtn').disabled = true;
+                addMessage('서버 연결이 해제되었습니다', true);
+            });
 
-      const roomCode = document.getElementById('roomCode').value;
-      const message = document.getElementById('message').value;
-      socket.emit('send_message', { roomCode, message });
-    }
+            socket.on('error', (data) => {
+                addMessage(`에러: ${data.reason}`, true);
+            });
 
-    function getLogs() {
-      if (!socket || !socket.connected) {
-        log("⚠️ 먼저 방에 입장하세요.");
-        return;
-      }
+            socket.on('joined_room', (data) => {
+                addMessage(`방 ${data.roomCode}에 입장했습니다`, true);
+                document.getElementById('leaveBtn').disabled = false;
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('logsBtn').disabled = false;
+                document.getElementById('diceInput').disabled = false;
+                document.getElementById('diceBtn').disabled = false;
+            });
 
-      const roomCode = document.getElementById('roomCode').value;
-      socket.emit('get_chat_logs', { roomCode });
-    }
+            socket.on('left_room', (data) => {
+                addMessage(`방 ${data.roomCode}에서 퇴장했습니다`, true);
+                document.getElementById('leaveBtn').disabled = true;
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+                document.getElementById('logsBtn').disabled = true;
+                document.getElementById('diceInput').disabled = true;
+                document.getElementById('diceBtn').disabled = true;
+            });
 
-    function reconnect() {
-      if (socket && socket.connected) {
-        socket.disconnect();
-      }
-      connect();
-    }
-  </script>
+            socket.on('user_joined', (data) => {
+                addMessage(`${data.nickname}님이 입장했습니다`, true);
+            });
+
+            socket.on('user_left', (data) => {
+                addMessage(`${data.nickname}님이 퇴장했습니다`, true);
+            });
+
+            socket.on('receive_message', (data) => {
+                const time = new Date(data.timestamp).toLocaleTimeString();
+                addMessage(`[${time}] ${data.nickname}: ${data.message}`);
+            });
+
+            socket.on('chat_logs', (data) => {
+                addMessage('=== 채팅 기록 ===', true);
+                data.forEach(msg => {
+                    const time = new Date(msg.timestamp).toLocaleTimeString();
+                    addMessage(`[${time}] ${msg.nickname}: ${msg.message}`);
+                });
+                addMessage('===============', true);
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+            }
+        }
+
+        function joinRoom() {
+            const roomCode = document.getElementById('roomCode').value;
+            if (!roomCode) {
+                alert('방 코드를 입력하세요');
+                return;
+            }
+            socket.emit('join_room', { roomCode: roomCode });
+        }
+
+        function leaveRoom() {
+            socket.emit('leave_room');
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            const roomCode = document.getElementById('roomCode').value;
+
+            if (!message) {
+                alert('메시지를 입력하세요');
+                return;
+            }
+
+            socket.emit('send_message', { 
+                roomCode: roomCode,
+                message: message 
+            });
+            messageInput.value = '';
+        }
+
+        function sendDiceCommand() {
+            const diceInput = document.getElementById('diceInput');
+            const command = diceInput.value.trim();
+            const roomCode = document.getElementById('roomCode').value;
+
+            if (!command) {
+                alert('주사위 명령어를 입력하세요');
+                return;
+            }
+
+            socket.emit('send_message', { 
+                roomCode: roomCode,
+                message: `/roll ${command}`
+            });
+            diceInput.value = '';
+        }
+
+        function getChatLogs() {
+            const roomCode = document.getElementById('roomCode').value;
+            socket.emit('get_chat_logs', { roomCode: roomCode });
+        }
+
+        // Enter 키로 메시지 전송
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                if (e.target.id === 'messageInput') {
+                    sendMessage();
+                } else if (e.target.id === 'diceInput') {
+                    sendDiceCommand();
+                }
+            }
+        });
+    </script>
 </body>
 </html>

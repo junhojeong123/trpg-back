@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Server, Socket } from 'socket.io';
 import createDOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
@@ -8,27 +10,30 @@ import { JoinRoomDto } from './dto/join-room.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 import { DiceService } from '../dice/dice.service';
 import { RateLimitService } from './rate-limit.service';
+import { Chatmessage } from './entities/chat-message.entity';
 
 // DOMPurify 초기화 (XSS 방지)
 const window = new JSDOM('').window;
 const DOMPurify = createDOMPurify(window as any);
 
 // 설정 상수
-const MAX_MESSAGE_LENGTH = 200;           // 메시지 최대 길이
-const RATE_LIMIT_WINDOW_MS = 60000;       // 속도 제한 시간 창 (1분)
+const MAX_MESSAGE_LENGTH = 200;
+const RATE_LIMIT_WINDOW_MS = 60000;
 
 /**
  * 채팅 서비스
+ * 실제 비즈니스 로직 처리 (검증, 저장, 처리 등)
  */
 @Injectable()
 export class ChatService {
-  // 로거 인스턴스
   private readonly logger = new Logger(ChatService.name);
 
-  // 서비스 주입
   constructor(
     private readonly diceService: DiceService,
     private readonly rateLimitService: RateLimitService,
+    
+    @InjectRepository(Chatmessage)
+    private readonly ChatmessageRepository: Repository<Chatmessage>,
   ) {}
 
   /**
@@ -44,17 +49,14 @@ export class ChatService {
     try {
       const { roomCode } = dto;
 
-      // 기존에 참여한 방이 있다면 퇴장 처리
       if (clientData.roomCode) {
         client.leave(clientData.roomCode);
         server.to(clientData.roomCode).emit('user_left', { nickname: clientData.nickname });
       }
 
-      // 새로운 방 입장
       client.join(roomCode);
       clientData.roomCode = roomCode;
 
-      // 입장 성공 알림 (본인 + 방 내 다른 사용자)
       client.emit('joined_room', { roomCode });
       client.to(roomCode).emit('user_joined', { nickname: clientData.nickname });
     } catch (error) {
@@ -74,16 +76,10 @@ export class ChatService {
   ) {
     const { roomCode, nickname } = clientData;
 
-    // 1. 방에서 퇴장
     client.leave(roomCode);
-
-    // 2. 클라이언트 정보 업데이트
     clientData.roomCode = undefined;
 
-    // 3. 방 내 다른 사용자에게 퇴장 알림
     server.to(roomCode).emit('user_left', { nickname });
-
-    // 4. 성공 응답
     client.emit('left_room', { roomCode });
   }
 
@@ -92,13 +88,9 @@ export class ChatService {
    */
   async handleSendMessage(client: Socket, clientData: any, data: any, server: Server) {
     try {
-      // 1. DTO로 변환
       const dto = plainToClass(SendMessageDto, data);
-      
-      // 2. 검증 실행
       const errors = await validate(dto);
 
-      // 3. 검증 실패 시 에러 전송
       if (errors.length > 0) {
         client.emit('error', { code: 'VALIDATION_ERROR', reason: '입력값 검증 실패' });
         return;
@@ -106,13 +98,11 @@ export class ChatService {
 
       const { roomCode, message } = dto;
 
-      // 방 입장 여부 확인
       if (!clientData.roomCode || clientData.roomCode !== roomCode) {
         client.emit('error', { code: 'INVALID_ROOM', reason: '해당 방에 참여하지 않았습니다' });
         return;
       }
 
-      // 속도 제한 확인
       if (await this.rateLimitService.isRateLimited(clientData.userId)) {
         client.emit('error', { 
           code: 'RATE_LIMITED', 
@@ -122,20 +112,17 @@ export class ChatService {
         return;
       }
 
-      // 공백 메시지 제한
       const trimmedMessage = message.trim();
       if (!trimmedMessage) {
         client.emit('error', { code: 'EMPTY_MESSAGE', reason: '메시지 내용이 비어 있습니다' });
         return;
       }
 
-      // XSS 방지를 위한 메시지 정제
       const cleanMessage = DOMPurify.sanitize(trimmedMessage, {
-        ALLOWED_TAGS: [],      // 모든 태그 허용 안 함
-        ALLOWED_ATTR: [],      // 모든 속성 허용 안 함
+        ALLOWED_TAGS: [],
+        ALLOWED_ATTR: [],
       });
 
-      // 메시지 길이 제한
       if (cleanMessage.length > MAX_MESSAGE_LENGTH) {
         client.emit('error', { 
           code: 'MESSAGE_TOO_LONG', 
@@ -144,16 +131,10 @@ export class ChatService {
         return;
       }
 
-      // 주사위 명령어 처리
-      // 예: "/roll 2d6+3" 형식의 명령어
       if (cleanMessage.startsWith('/roll')) {
-        //  1. "/roll " 제거 및 공백 정리
         const diceCommand = cleanMessage.replace(/^\/roll\s+/, '').trim();
-        
-        //  2. 순수 주사위 명령어만 전달
         const result = this.diceService.rollCommand(diceCommand);
-      
-        //  3. 결과 메시지 구성
+        
         const resultPayload = {
           senderId: 'System',
           nickname: '주사위',
@@ -162,12 +143,10 @@ export class ChatService {
           timestamp: new Date(),
         };
         
-        //  4. 방에 결과 전송
         server.to(roomCode).emit('receive_message', resultPayload);
         return;
       }
 
-      // 전송할 메시지 정보 구성
       const payload = {
         senderId: clientData.userId,
         nickname: clientData.nickname,
@@ -177,10 +156,7 @@ export class ChatService {
       };
 
       try {
-        // DB 저장
         await this.saveMessage(payload);
-
-        // 해당 방 사용자들에게 메시지 전송
         server.to(roomCode).emit('receive_message', payload);
       } catch (error) {
         this.logger.error('메시지 저장 실패', error.stack);
@@ -192,13 +168,12 @@ export class ChatService {
     }
   }
 
-  
+  /**
+   * 채팅 기록 조회 처리
+   */
   async handleGetChatLogs(client: Socket, roomCode: string) {
     try {
-      // DB에서 채팅 기록 조회
       const logs = await this.getMessages(roomCode);
-
-      // 클라이언트에게 전송
       client.emit('chat_logs', logs);
     } catch (error) {
       this.logger.error('채팅 기록 조회 실패', error.stack);
@@ -206,24 +181,47 @@ export class ChatService {
     }
   }
 
+  /**
+   * 메시지 DB 저장
+   */
+  async saveMessage(payload: any): Promise<Chatmessage> {
+    try {
+      const chatMessage = this.ChatmessageRepository.create({
+        roomCode: payload.roomCode,
+        senderId: payload.senderId,
+        nickname: payload.nickname,
+        message: payload.message,
+        timestamp: payload.timestamp,
+      });
 
-  async saveMessage(payload: any) {
-
-    this.logger.log(`메시지 저장: ${payload.message}`);
+      const savedMessage = await this.ChatmessageRepository.save(chatMessage);
+      this.logger.log(`메시지 저장 완료: ${savedMessage.id}`);
+      
+      return savedMessage;
+    } catch (error) {
+      this.logger.error('메시지 저장 실패', error.stack);
+      throw error;
+    }
   }
 
-
-
-  async getMessages(roomCode: string) {
-
-    return [
-      {
-        senderId: 'system',
-        nickname: '시스템',
-        message: '환영합니다!',
-        roomCode,
-        timestamp: new Date(),
-      }
-    ];
+  /**
+   * 채팅 기록 조회
+   */
+  async getMessages(roomCode: string): Promise<Chatmessage[]> {
+    try {
+      const messages = await this.ChatmessageRepository
+        .createQueryBuilder('chatmessage')
+        .where('chatmessage.roomCode = :roomCode', { roomCode })
+        .orderBy('chatmessage.timestamp', 'DESC')
+        .limit(50)
+        .getMany();
+      
+      this.logger.log(`채팅 기록 조회 완료: ${messages.length}개 메시지`);
+      
+      return messages.reverse();
+    } catch (error) {
+      this.logger.error('채팅 기록 조회 실패', error.stack);
+      throw error;
+    }
   }
 }

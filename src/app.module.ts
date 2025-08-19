@@ -1,7 +1,7 @@
 import {  Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { chatmessage } from './chat/entities/chat-message.entity'; 
+import { Chatmessage} from './chat/entities/chat-message.entity'; 
 import { ChatModule } from './chat/chat.module';
 
 @Module({
@@ -21,7 +21,7 @@ import { ChatModule } from './chat/chat.module';
       username: 'postgres',
       password: '1234',
       database: 'chat_app',
-      entities: [chatmessage],
+      entities: [Chatmessage],
       synchronize: true, // dev 전용
     }),
     ChatModule,
