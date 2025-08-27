@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## Installed Package
 ```bash
 # pnpm ls   <-- 이걸로 확인가능
@@ -41,3 +42,7 @@ DB쪽은 database까지만 만들면 나머지는 마이그레이션을 통해 �
 JWT_SECRE => 여기서는는 임의로 작성 ex) dffe#@WWQ23d
 추가사항
 ```
+=======
+﻿# Chat Backend
+바뀐건 main.ts app.controller.ts chat.gateway.ts chat.module.ts 이고 추가된게 rate-limit.service.ts 입니다
+>>>>>>> chat-main-branch

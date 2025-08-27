@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "module": "commonjs",
+    "esModuleInterop": true,
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -12,15 +13,15 @@
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": false, // 이걸 허용하면 매번 null인지 확인한다. 
+    "strictNullChecks": false,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-			"@/*": ["src/*"],
-			"test/*": ["test/*"]
-		},//절대 경로로하면 안돼서 @이면 src로 읽으라고 설절한 것 아니면 상대 경로로 수정
+      "@/*": ["src/*"],
+      "test/*": ["test/*"]
+    },
     "allowJs": true
   }
 }

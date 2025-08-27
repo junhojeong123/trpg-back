@@ -8,6 +8,7 @@ import {
 } from 'typeorm-transactional';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 
 async function bootstrap() {
   initializeTransactionalContext({ storageDriver: StorageDriver.AUTO });
@@ -26,11 +27,12 @@ async function bootstrap() {
   );
   app.enableCors({
     origin: frontEndOrigin,
-    // methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Set-Cookie'],
     exposedHeaders: ['Set-Cookie'],
   });
+
+  // 글로벌 검증 파이프
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -39,16 +41,19 @@ async function bootstrap() {
     }),
   );
 
+  // Swagger 설정 (있으면 유용)
   const config = new DocumentBuilder()
-    .setTitle('Echo-Tube-API')
-    .setDescription('The echotube API description')
+    .setTitle('TRPG + Chat API')
+    .setDescription('TRPG + Chat 통합 API')
     .setVersion('1.0')
-    .addTag('echo-tube')
     .addBearerAuth()
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, documentFactory);
+
+  // WebSocket adapter (chat 모듈의 socket.io 사용을 위해)
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   await app.listen(port);
 }
