@@ -1,6 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Module} from '@nestjs/common';
 import { AppService } from './app.service';
+import { ChatModule } from './chat/chat.module';
 
+@Module({
+  imports: [ChatModule], // ChatModule 임포트 확인
+})
+export class AppModule {}
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
@@ -8,13 +13,5 @@ export class AppController {
   @Get()
   getHello(): string {
     return this.appService.getHello();
-  }
-
-  @Get('health')  // 새로운 health 엔드포인트 추가
-  health() {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString()
-    };
   }
 }

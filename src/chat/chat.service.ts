@@ -1,8 +1,9 @@
+// src/chat/chat.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Server, Socket } from 'socket.io';
-import createDOMPurify from 'dompurify';
+import * as dompurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import { plainToClass } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -12,9 +13,13 @@ import { DiceService } from '../dice/dice.service';
 import { RateLimitService } from './rate-limit.service';
 import { Chatmessage } from './entities/chat-message.entity';
 
-// DOMPurify 초기화 (XSS 방지)
-const window = new JSDOM('').window;
-const DOMPurify = createDOMPurify(window as any);
+// --- DOMPurify 초기화 (Node 환경에서 안전하게) ---
+// jsdom 윈도우 생성
+const windowForDOMPurify = new JSDOM('').window as unknown as any;
+// dompurify 모듈은 ESM default export 또는 CommonJS 형태일 수 있으므로 안전하게 처리
+const createDOMPurify = (dompurify as any).default ?? dompurify;
+// DOMPurify 인스턴스 (타입 이슈를 피하려고 any로 처리)
+const DOMPurify: any = createDOMPurify(windowForDOMPurify);
 
 // 설정 상수
 const MAX_MESSAGE_LENGTH = 200;
@@ -31,7 +36,7 @@ export class ChatService {
   constructor(
     private readonly diceService: DiceService,
     private readonly rateLimitService: RateLimitService,
-    
+
     @InjectRepository(Chatmessage)
     private readonly ChatmessageRepository: Repository<Chatmessage>,
   ) {}
@@ -60,7 +65,7 @@ export class ChatService {
       client.emit('joined_room', { roomCode });
       client.to(roomCode).emit('user_joined', { nickname: clientData.nickname });
     } catch (error) {
-      this.logger.error('방 참여 오류', error.stack);
+      this.logger.error('방 참여 오류', error?.stack ?? error);
       client.emit('error', { code: 'SERVER_ERROR', reason: '방 참여에 실패했습니다' });
     }
   }
@@ -118,6 +123,7 @@ export class ChatService {
         return;
       }
 
+      // XSS 방지: 허용 태그/속성 없음 (순수 텍스트)
       const cleanMessage = DOMPurify.sanitize(trimmedMessage, {
         ALLOWED_TAGS: [],
         ALLOWED_ATTR: [],
@@ -159,11 +165,11 @@ export class ChatService {
         await this.saveMessage(payload);
         server.to(roomCode).emit('receive_message', payload);
       } catch (error) {
-        this.logger.error('메시지 저장 실패', error.stack);
+        this.logger.error('메시지 저장 실패', error?.stack ?? error);
         client.emit('error', { code: 'SERVER_ERROR', reason: '메시지 처리에 실패했습니다' });
       }
     } catch (error) {
-      this.logger.error('메시지 처리 오류', error.stack);
+      this.logger.error('메시지 처리 오류', error?.stack ?? error);
       client.emit('error', { code: 'SERVER_ERROR', reason: '메시지 처리에 실패했습니다' });
     }
   }
@@ -176,7 +182,7 @@ export class ChatService {
       const logs = await this.getMessages(roomCode);
       client.emit('chat_logs', logs);
     } catch (error) {
-      this.logger.error('채팅 기록 조회 실패', error.stack);
+      this.logger.error('채팅 기록 조회 실패', error?.stack ?? error);
       client.emit('error', { code: 'SERVER_ERROR', reason: '채팅 기록 조회에 실패했습니다' });
     }
   }
@@ -199,7 +205,7 @@ export class ChatService {
       
       return savedMessage;
     } catch (error) {
-      this.logger.error('메시지 저장 실패', error.stack);
+      this.logger.error('메시지 저장 실패', error?.stack ?? error);
       throw error;
     }
   }
@@ -220,7 +226,7 @@ export class ChatService {
       
       return messages.reverse();
     } catch (error) {
-      this.logger.error('채팅 기록 조회 실패', error.stack);
+      this.logger.error('채팅 기록 조회 실패', error?.stack ?? error);
       throw error;
     }
   }

@@ -4,7 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Room } from './entities/room.entity';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { UsersService } from '@/users/users.service';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 
 jest.mock('typeorm-transactional', () => ({
   Transactional: () => () => ({}),

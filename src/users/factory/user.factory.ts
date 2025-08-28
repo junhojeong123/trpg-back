@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { User } from '../entities/user.entity';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { UserRole } from '../entities/user-role.enum';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserPasswordRequest } from '../dto/update-user-password.dto';

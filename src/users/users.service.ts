@@ -9,7 +9,7 @@ import { UpdateUserPasswordRequest } from './dto/update-user-password.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 import { UpdateUserNicknameRequest } from './dto/update-user-nickname.dto';
 
 
@@ -68,6 +68,7 @@ export class UsersService {
     return this.usersRepository
       .findOne({
         where: { email: email },
+        select: ['id', 'email', 'passwordHash', 'name', 'nickname', 'role']
       })
       .then((user) => {
         if (user) {

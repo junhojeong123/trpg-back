@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { LoginUserDto } from './dto/login-user.dto';
-import { UserRole } from '@/users/entities/user-role.enum';
+import { UserRole } from '../users/entities/user-role.enum';
 import { LoginResponseDto } from './dto/login-response.dto';
 
 describe('AuthController', () => {

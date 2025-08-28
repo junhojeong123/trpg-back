@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { UsersService } from '@/users/users.service';
+import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
-import { createUserEntity } from '@/users/factory/user.factory';
+import * as bcrypt from 'bcrypt';
+import { createUserEntity } from '../users/factory/user.factory';
 import {
   InternalServerErrorException,
   NotFoundException,
@@ -12,8 +12,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { RefreshTokenRepository } from './refresh-token.repository';
 import { createMock } from '@golevelup/ts-jest';
-import { User } from '@/users/entities/user.entity';
-import { UserRole } from '@/users/entities/user-role.enum';
+import { User } from '../users/entities/user.entity';
+import { UserRole } from '../users/entities/user-role.enum';
 import * as crypto from 'crypto';
 
 jest.mock('typeorm-transactional', () => ({

@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { Room } from '../entities/room.entity';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 
 export const createRoomEntity = (options: Partial<Room> = {}): Room => {
   const room = new Room();

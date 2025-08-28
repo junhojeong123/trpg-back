@@ -9,12 +9,4 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
-
-  @Get('health')  // 새로운 health 엔드포인트 추가
-  health() {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString()
-    };
-  }
 }

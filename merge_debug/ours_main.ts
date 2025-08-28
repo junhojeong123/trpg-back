@@ -5,41 +5,32 @@ import { ValidationPipe } from '@nestjs/common';
 import {
   initializeTransactionalContext,
   StorageDriver,
-  addTransactionalDataSource, // ✅ 추가 import
 } from 'typeorm-transactional';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
-import { IoAdapter } from '@nestjs/platform-socket.io';
 
 async function bootstrap() {
-  // 1. 트랜잭션 컨텍스트 초기화 (가장 먼저 실행)
   initializeTransactionalContext({ storageDriver: StorageDriver.AUTO });
-  
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // 2. ✅ 데이터 소스 인스턴스 가져오기 및 트랜잭션 등록 (해결 핵심!)
-  const dataSource = app.get(DataSource);
-  addTransactionalDataSource(dataSource); // ⚠️ 이 부분이 필수!
-
-  // 3. 마이그레이션 실행 (필요 시)
   if (configService.get<boolean>('DATABASE_MIGRATIONS_RUN')) {
+    const dataSource = app.get(DataSource);
     await dataSource.runMigrations({ transaction: 'all' });
   }
 
-  // 4. 포트 설정
-  const port = configService.get<number>('PORT', 3000);
-  
-  // 5. CORS 설정 (개발용)
-  const frontEndOrigin = '*'; // 개발 편의를 위해 모든 도메인 허용 (배포 시 변경 필요)
+  const port = configService.get<number>('HTTP_SERVER_POST', 3000);
+  const frontEndOrigin = configService.get<string>(
+    'FRONTEND_ORIGIN',
+    'http://localhost:3000',
+  );
   app.enableCors({
     origin: frontEndOrigin,
+    // methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Set-Cookie'],
     exposedHeaders: ['Set-Cookie'],
   });
-
-  // 6. 글로벌 검증 파이프
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -48,22 +39,17 @@ async function bootstrap() {
     }),
   );
 
-  // 7. Swagger 설정
   const config = new DocumentBuilder()
-    .setTitle('TRPG + Chat API')
-    .setDescription('TRPG + Chat 통합 API')
+    .setTitle('Echo-Tube-API')
+    .setDescription('The echotube API description')
     .setVersion('1.0')
+    .addTag('echo-tube')
     .addBearerAuth()
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, documentFactory);
 
-  // 8. WebSocket adapter
-  app.useWebSocketAdapter(new IoAdapter(app));
-
-  // 9. 서버 시작
   await app.listen(port);
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
 }
 bootstrap();
