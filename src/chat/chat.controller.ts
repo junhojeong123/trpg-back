@@ -1,26 +1,28 @@
-
-import { Controller, Get, Query, NotFoundException } from '@nestjs/common';
+// src/modules/chat/chat.controller.ts
+import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { Chatmessage } from './entities/chat-message.entity';
+import { GetChatLogsDto } from './dto/get-chat-logs.dto';
 
 @Controller('chat')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
+  
   @Get('logs')
   async getChatLogsByRoom(
-    @Query('roomCode') roomCode: string,
+    @Query() query: GetChatLogsDto,
   ): Promise<Chatmessage[]> {
+    const { roomCode, limit = 50 } = query;
+
     if (!roomCode) {
-      throw new NotFoundException('방 코드가 필요합니다.');
+      throw new BadRequestException('roomCode 쿼리 파라미터가 필요합니다.');
     }
 
-    const messages = await this.chatService.getMessages(roomCode);
+    // ChatService에서 limit 적용
+    const messages = await this.chatService.getMessages(roomCode, limit);
 
-    if (!messages || messages.length === 0) {
-      throw new NotFoundException(`방 ${roomCode}에 채팅 기록이 없습니다.`);
-    }
-
-    return messages;
+    // 채팅이 없어도 200 OK + [] 반환
+    return messages ?? [];
   }
 }
