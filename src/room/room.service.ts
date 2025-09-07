@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,7 +11,6 @@ import { Repository } from 'typeorm';
 import { Room } from './entities/room.entity';
 import { User } from '@/users/entities/user.entity';
 import * as bcrypt from 'bcrypt';
-import { Logger } from '@nestjs/common';
 import { UsersService } from '@/users/users.service';
 import { Transactional } from 'typeorm-transactional';
 import { RoomParticipantDto } from './dto/room-participant.dto';
@@ -23,7 +23,7 @@ export class RoomService {
     @InjectRepository(Room)
     private readonly roomRepository: Repository<Room>,
     private readonly usersService: UsersService,
-  ) { }
+  ) {}
 
   // 방 생성
   @Transactional()
@@ -47,7 +47,9 @@ export class RoomService {
         creator: user,
         participants: [user],
       });
-      const existingRoom = await this.roomRepository.findOne({ where: { name: dto.name } });
+      const existingRoom = await this.roomRepository.findOne({
+        where: { name: dto.name },
+      });
       if (existingRoom) throw new BadRequestException('이미 존재하는 방 이름입니다.');
 
       const savedRoom = await this.roomRepository.save(room);
@@ -62,11 +64,7 @@ export class RoomService {
 
   // 방 참가
   @Transactional()
-  async joinRoom(
-    roomId: number,
-    userId: number,
-    password?: string,
-  ): Promise<void> {
+  async joinRoom(roomId: number, userId: number, password?: string): Promise<void> {
     this.logger.log(`[JOIN_ROOM] 방 ID: ${roomId}, 사용자 ID: ${userId} 참여 시도`);
 
     try {
@@ -74,7 +72,7 @@ export class RoomService {
       const room = await this.roomRepository.findOne({
         where: { id: roomId },
         relations: ['participants'],
-        lock: { mode: 'pessimistic_write' } // 동시성 제어
+        lock: { mode: 'pessimistic_write' }, // 동시성 제어
       });
 
       if (!room) {
@@ -99,7 +97,29 @@ export class RoomService {
     }
   }
 
-  // 비밀번호 검증 (단순히 일치 여부만 체크)
+  //  공용 검증 메서드 (채팅 등 다른 서비스에서 사용 가능)
+  async validateRoomAndParticipant(roomId: number, userId: number): Promise<Room> {
+    const room = await this.roomRepository.findOne({
+      where: { id: roomId },
+      relations: ['participants'],
+    });
+
+    if (!room) {
+      this.logger.warn(`[VALIDATE] 방을 찾을 수 없음: ${roomId}`);
+      throw new NotFoundException('방을 찾을 수 없습니다.');
+    }
+
+    const isParticipant = room.participants.some((p) => p.id === userId);
+    if (!isParticipant) {
+      this.logger.warn(`[VALIDATE] 참가자가 아님: roomId=${roomId}, userId=${userId}`);
+      throw new BadRequestException('방에 참가하지 않은 사용자입니다.');
+    }
+
+    this.logger.log(`[VALIDATE] 방 검증 성공: roomId=${roomId}, userId=${userId}`);
+    return room;
+  }
+
+  // 비밀번호 검증
   private async validatePassword(room: Room, password?: string): Promise<void> {
     if (!room.password) return;
 
@@ -147,11 +167,10 @@ export class RoomService {
     });
     if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
 
-    // User 엔티티 → RoomParticipantDto 변환
-    return room.participants.map(p => ({
+    return room.participants.map((p) => ({
       id: p.id,
       name: p.name,
-      nickname: p.nickname
+      nickname: p.nickname,
     }));
   }
 }
