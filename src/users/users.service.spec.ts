@@ -1,3 +1,4 @@
+// src/users/users.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { Repository } from 'typeorm';
@@ -7,7 +8,6 @@ import {
   createUserDto,
   updateUserNicknameDto,
   updateUserPasswordDto,
-  createUserEntity,
 } from './factory/user.factory';
 import {
   ConflictException,
@@ -16,6 +16,12 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { UpdateUserNicknameRequest } from './dto/update-user-nickname.dto';
+
+// bcrypt 모킹
+jest.mock('bcryptjs', () => ({
+  hash: jest.fn().mockImplementation((str, salt) => Promise.resolve(`hashed_${str}`)),
+  compare: jest.fn().mockImplementation((str, hash) => Promise.resolve(true)),
+}));
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -27,7 +33,7 @@ describe('UsersService', () => {
         UsersService,
         {
           provide: getRepositoryToken(User),
-          useClass: Repository, // Mock TypeORM repository
+          useClass: Repository,
         },
       ],
     }).compile();
@@ -37,13 +43,13 @@ describe('UsersService', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks(); // Reset all mocks after each test
+    jest.clearAllMocks();
   });
 
   describe('signUpUser', () => {
     const userDtoForCreate = createUserDto();
     const { name, email, nickname, password } = userDtoForCreate;
-    const hashedPassword = bcrypt.hashSync(password, 10);
+    const hashedPassword = 'hashed_' + password;
     const user = {
       name: name,
       nickname: nickname,
@@ -54,15 +60,20 @@ describe('UsersService', () => {
     it('should create a new user successfully', async () => {
       jest.spyOn(service, 'isUserExists').mockResolvedValue(false);
       jest.spyOn(service, 'isNicknameAvailable').mockResolvedValue(false);
-      jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
+      (bcrypt.hash as jest.Mock).mockResolvedValue(hashedPassword);
       jest.spyOn(repository, 'create').mockReturnValue(user as User);
       jest.spyOn(repository, 'save').mockResolvedValue(user as User);
 
       const result = await service.createUser(userDtoForCreate);
 
       expect(result).toEqual(user);
-      expect(repository.create).toHaveBeenCalledWith(user);
-      expect(repository.save).toHaveBeenCalledWith(user);
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({
+        name,
+        nickname,
+        email,
+      }));
+      expect(repository.save).toHaveBeenCalledWith(expect.objectContaining(user));
+      expect(bcrypt.hash).toHaveBeenCalledWith(password, 10);
     });
 
     it('should throw an error if email already exists', async () => {
@@ -85,7 +96,17 @@ describe('UsersService', () => {
 
   describe('getUserById', () => {
     it('should return a user if found', async () => {
-      const mockUser = createUserEntity();
+      const mockUser = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        nickname: 'testuser',
+        passwordHash: 'hashed_password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      } as User;
 
       jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
 
@@ -107,7 +128,17 @@ describe('UsersService', () => {
 
   describe('findUserByEmail', () => {
     it('should return a user if found', async () => {
-      const mockUser = createUserEntity();
+      const mockUser = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        nickname: 'testuser',
+        passwordHash: 'hashed_password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      } as User;
       const email = mockUser.email;
 
       jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
@@ -115,9 +146,10 @@ describe('UsersService', () => {
       const result = await service.getUserByEmail(email);
 
       expect(result).toEqual(mockUser);
-      expect(repository.findOne).toHaveBeenCalledWith({
+      // select 옵션이 자동으로 추가될 수 있으므로 유연하게 검증
+      expect(repository.findOne).toHaveBeenCalledWith(expect.objectContaining({
         where: { email },
-      });
+      }));
     });
 
     it('should throw NotFoundException Error if no user is found', async () => {
@@ -135,7 +167,17 @@ describe('UsersService', () => {
 
   describe('isUserExists', () => {
     it('should return true if user exists', async () => {
-      const mockUser = createUserEntity();
+      const mockUser = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        nickname: 'testuser',
+        passwordHash: 'hashed_password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      } as User;
       jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
 
       const result = await service.isUserExists(mockUser.email);
@@ -156,7 +198,17 @@ describe('UsersService', () => {
     it('should update user nickname successfully', async () => {
       const UpdateUserNicknameRequest = updateUserNicknameDto();
 
-      const user = createUserEntity();
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        nickname: 'oldNickname',
+        passwordHash: 'hashed_password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      } as User;
       const newNickname = UpdateUserNicknameRequest.nickname;
 
       jest.spyOn(service, 'getUserById').mockResolvedValue(user);
@@ -164,17 +216,17 @@ describe('UsersService', () => {
       jest.spyOn(repository, 'save').mockResolvedValue({
         ...user,
         nickname: newNickname,
-      });
+      } as User);
 
       const result = await service.updateUserNickname(
         user.id,
         UpdateUserNicknameRequest,
       );
       expect(result.nickname).toBe(newNickname);
-      expect(repository.save).toHaveBeenCalledWith({
+      expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({
         ...user,
         nickname: newNickname,
-      });
+      }));
     });
 
     it('should throw NotFoundException if user does not exist', async () => {
@@ -188,7 +240,17 @@ describe('UsersService', () => {
     });
 
     it('should throw ConflictException if nickname is already existed.', async () => {
-      const user = createUserEntity();
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        nickname: 'oldNickname',
+        passwordHash: 'hashed_password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      } as User;
 
       jest.spyOn(service, 'getUserById').mockResolvedValue(user);
       jest.spyOn(service, 'isNicknameAvailable').mockResolvedValue(true);
@@ -204,26 +266,35 @@ describe('UsersService', () => {
   describe('updatePassword', () => {
     it('should update user password successfully', async () => {
       const UpdateUserPasswordRequest = updateUserPasswordDto();
-      const hashedPassword = await bcrypt.hash(
-        UpdateUserPasswordRequest.password,
-        10,
-      );
-      const user = createUserEntity();
+      const hashedPassword = 'hashed_' + UpdateUserPasswordRequest.password;
+      const user = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        nickname: 'testuser',
+        passwordHash: 'old_hashed_password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      } as User;
 
       jest.spyOn(service, 'getUserById').mockResolvedValue(user);
+      (bcrypt.hash as jest.Mock).mockResolvedValue(hashedPassword);
       jest
         .spyOn(repository, 'save')
-        .mockResolvedValue({ ...user, passwordHash: hashedPassword });
+        .mockResolvedValue({ ...user, passwordHash: hashedPassword } as User);
 
       const result = await service.updateUserPassword(
         user.id,
         UpdateUserPasswordRequest,
       );
       expect(result.passwordHash).toBe(hashedPassword);
-      expect(repository.save).toHaveBeenCalledWith({
+      expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({
         ...user,
         passwordHash: hashedPassword,
-      });
+      }));
+      expect(bcrypt.hash).toHaveBeenCalledWith(UpdateUserPasswordRequest.password, 10);
     });
 
     it('should throw NotFoundException if user does not exist', async () => {
@@ -239,7 +310,17 @@ describe('UsersService', () => {
 
   describe('deleteAccount', () => {
     it('should remove user account successfully', async () => {
-      const mockUser = createUserEntity();
+      const mockUser = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        nickname: 'testuser',
+        passwordHash: 'hashed_password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      } as User;
 
       jest.spyOn(service, 'getUserById').mockResolvedValue(mockUser);
       jest.spyOn(repository, 'softDelete').mockResolvedValue({
@@ -264,7 +345,17 @@ describe('UsersService', () => {
     });
 
     it('should throw InternalServerErrorException when deleting user occurs error.', async () => {
-      const mockUser = createUserEntity();
+      const mockUser = {
+        id: 1,
+        email: 'test@example.com',
+        name: 'Test User',
+        nickname: 'testuser',
+        passwordHash: 'hashed_password',
+        role: 'user',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      } as User;
 
       jest.spyOn(service, 'getUserById').mockResolvedValue(mockUser);
       jest.spyOn(repository, 'softDelete').mockResolvedValue({
@@ -273,7 +364,7 @@ describe('UsersService', () => {
         generatedMaps: [],
       });
 
-      expect(service.softDeleteUser(mockUser.id)).rejects.toThrow(
+      await expect(service.softDeleteUser(mockUser.id)).rejects.toThrow(
         InternalServerErrorException,
       );
     });

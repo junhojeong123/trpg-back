@@ -1,3 +1,4 @@
+// src/room/room.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { RoomService } from './room.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -5,6 +6,12 @@ import { Room } from './entities/room.entity';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { UsersService } from '@/users/users.service';
 import * as bcrypt from 'bcrypt';
+
+// bcrypt 모킹
+jest.mock('bcrypt', () => ({
+  hash: jest.fn(),
+  compare: jest.fn(),
+}));
 
 jest.mock('typeorm-transactional', () => ({
   Transactional: () => () => ({}),
@@ -44,14 +51,12 @@ describe('RoomService', () => {
 
     service = moduleRef.get<RoomService>(RoomService);
   });
+  
   afterEach(() => {
-    jest.restoreAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('createRoom', () => {
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
     const createRoomDto = { name: 'TestRoom', password: '1234', maxParticipants: 2 };
     const creatorId = 1;
 
@@ -83,20 +88,16 @@ describe('RoomService', () => {
     const userId = 2;
     const password = '1234';
 
-    afterEach(() => {
-      jest.spyOn(bcrypt, 'compare').mockRestore()
-    })
-
     it('should join room successfully', async () => {
       const mockUser = { id: userId };
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const hashedPassword = '$2b$10$E6stmA8CQr0v9JG5sQjxQekQmCO1uZueNyhWpcmG0OPhcNkx1VmMG';
       const mockRoom = {
         id: roomId,
         password: hashedPassword,
         participants: [],
       };
 
-      jest.spyOn(bcrypt, 'compare').mockImplementation(() => Promise.resolve(true));
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       usersService.getActiveUserById.mockResolvedValue(mockUser);
       roomRepository.findOne.mockResolvedValue(mockRoom);
@@ -104,11 +105,32 @@ describe('RoomService', () => {
       await service.joinRoom(roomId, userId, password);
 
       expect(roomRepository.createQueryBuilder).toHaveBeenCalled();
-      expect(roomRepository.createQueryBuilder().relation).toHaveBeenCalledWith(Room, 'participants'); //relation에서 room을 원해서 필요 
+      expect(roomRepository.createQueryBuilder().relation).toHaveBeenCalledWith(Room, 'participants');
       expect(roomRepository.createQueryBuilder().of).toHaveBeenCalledWith(roomId);
       expect(roomRepository.createQueryBuilder().add).toHaveBeenCalledWith(userId);
+      expect(bcrypt.compare).toHaveBeenCalledWith(password, hashedPassword);
+    });
+    
+    it('should throw error when password is incorrect', async () => {
+      const mockUser = { id: userId };
+      const hashedPassword = '$2b$10$E6stmA8CQr0v9JG5sQjxQekQmCO1uZueNyhWpcmG0OPhcNkx1VmMG';
+      const mockRoom = {
+        id: roomId,
+        password: hashedPassword,
+        participants: [],
+      };
+
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      usersService.getActiveUserById.mockResolvedValue(mockUser);
+      roomRepository.findOne.mockResolvedValue(mockRoom);
+
+      await expect(service.joinRoom(roomId, userId, password))
+        .rejects
+        .toThrow();
     });
   });
+  
   describe('getParticipants', () => {
     const roomId = 1;
     const mockUser1 = { id: 1, name: 'Alice', nickname: 'A' };

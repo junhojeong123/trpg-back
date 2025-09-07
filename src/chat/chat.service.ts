@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
-import * as dompurify from 'dompurify';
+import createDOMPurify from 'isomorphic-dompurify';
 import { JSDOM } from 'jsdom';
 import { Server } from 'socket.io';
 import { Chatmessage } from '@/chat/entities/chat-message.entity';
@@ -18,9 +18,9 @@ import { RoomService } from '@/room/room.service';
 import { RateLimitService } from './rate-limit.service';
 import { DiceService } from '../dice/dice.service';
 
-// DOMPurify Node.js 환경 설정
+// DOMPurify 설정 (XSS 방지)
 const windowForDOMPurify = new JSDOM('').window as unknown as any;
-const DOMPurify = (dompurify as any)(windowForDOMPurify);
+const DOMPurify = createDOMPurify(windowForDOMPurify);
 
 // TypeScript가 선택적 메서드가 존재함을 알 수 있도록 경량 인터페이스 정의
 interface IRateLimitService {

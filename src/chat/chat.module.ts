@@ -1,17 +1,20 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ChatGateway } from './chat.gateway';
-import { Chatmessage } from './entities/chat-message.entity';
 import { ChatService } from './chat.service';
-import { ChatController } from './chat.controller';
+import { ChatGateway } from './chat.gateway';
+import { Chatmessage } from '@/chat/entities/chat-message.entity';
+import { RoomModule } from '@/room/room.module';
+import { UsersModule } from '@/users/users.module'; // ✅ 추가
 import { RateLimitService } from './rate-limit.service';
-import { DiceService } from '../dice/dice.service';
+import { DiceService } from '@/dice/dice.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Chatmessage]),
+    RoomModule,
+    UsersModule, // ✅ UsersModule 불러오기
   ],
-  providers: [ChatGateway, ChatService, RateLimitService, DiceService],
-  controllers: [ChatController],
-  exports: [ChatService, RateLimitService, DiceService],
+  providers: [ChatService, ChatGateway, RateLimitService, DiceService],
+  exports: [ChatService],
 })
 export class ChatModule {}
